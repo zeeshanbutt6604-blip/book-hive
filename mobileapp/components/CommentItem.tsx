@@ -40,7 +40,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment }) => {
     userIdObj = null;
   }
   
-  const userId = userIdObj ? userIdObj._id : comment.userId;
+  const userId = userIdObj && userIdObj._id ? userIdObj._id : (typeof comment.userId === "string" ? comment.userId : null);
   const userName = (userIdObj && typeof userIdObj === "object" && userIdObj.name) 
     ? userIdObj.name 
     : (comment.userName || "Unknown");
@@ -50,6 +50,9 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment }) => {
   const userAvatar = profilePicture ? userService.getFileUrl(profilePicture) : undefined;
 
   const handleAvatarPress = () => {
+    if (!userId || userId === "null" || userId === "undefined") {
+      return; // Don't navigate if userId is invalid
+    }
     router.push(`/(routes)/profile?userId=${userId}` as any);
   };
 

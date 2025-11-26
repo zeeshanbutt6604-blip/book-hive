@@ -282,6 +282,30 @@ export const getUserInfo = catchAsyncError(async (req, res, next) => {
   }
 });
 
+// Get user by ID (public profile)
+export const getUserById = catchAsyncError(async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return next(new ErrorHandler("Invalid user ID", 400));
+    }
+
+    const user = await User.findById(userId).select("name email profile_picture createdAt");
+
+    if (!user) {
+      return next(new ErrorHandler("User not found", 404));
+    }
+
+    res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    return next(new ErrorHandler(error.message, 400));
+  }
+});
+
 // Update user info
 export const updateUserInfo = catchAsyncError(async (req, res, next) => {
   try {

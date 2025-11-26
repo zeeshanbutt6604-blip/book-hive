@@ -14,21 +14,31 @@ const getAuthHeaders = async () => {
 export const userService = {
   // Get user by ID (public profile)
   getUserById: async (userId) => {
-    // Since we don't have a public user endpoint, we'll need to get posts by user
-    // For now, we'll use the posts endpoint and filter
-    // This is a limitation - ideally the backend should have a GET /api/users/:id endpoint
-    const response = await api.get("/api/posts");
-    const posts = response.data.posts || [];
-    const userPost = posts.find((post) => post.userId._id === userId);
-    
-    if (userPost && userPost.userId) {
-      return {
-        success: true,
-        user: userPost.userId,
-      };
+    if (!userId) {
+      throw new Error("User ID is required");
     }
     
-    throw new Error("User not found");
+    try {
+      const response = await api.get(`/api/auth/user/${userId}`);
+      return response.data;
+    } catch (error) {
+      // Fallback: try to get user from posts if the endpoint fails
+      const response = await api.get("/api/posts");
+      const posts = response.data.posts || [];
+      const userPost = posts.find((post) => {
+        const postUserId = post.userId?._id || post.userId;
+        return postUserId === userId;
+      });
+      
+      if (userPost && userPost.userId) {
+        return {
+          success: true,
+          user: userPost.userId,
+        };
+      }
+      
+      throw new Error(error.response?.data?.message || "User not found");
+    }
   },
 
   // Get user posts

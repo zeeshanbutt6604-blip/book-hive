@@ -7,6 +7,7 @@ import {
   logoutUser,
   updateAccessToken,
   getUserInfo,
+  getUserById,
   updateUserInfo,
   updatePassword,
   resendVerificationToken,
@@ -450,6 +451,47 @@ router.post("/request/token/new", resendVerificationToken);
  *                   example: 401
  */
 router.get("/me", isAutheticated, getUserInfo);
+
+/**
+ * @swagger
+ * /api/auth/user/{userId}:
+ *   get:
+ *     summary: Get user profile by ID (public)
+ *     tags: [User Management]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: User profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     profile_picture:
+ *                       type: string
+ *       404:
+ *         description: User not found
+ */
+router.get("/user/:userId", getUserById);
+
 /**
  * @swagger
  * /api/auth/update-user-info:

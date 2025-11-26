@@ -177,7 +177,14 @@ const PostDetailScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const isOwner = post && currentUserId && (post.userId === currentUserId || (typeof post.userId === "object" && post.userId._id === currentUserId));
+  // Check if current user is the post owner - delete button should only show for post owner
+  const isOwner = post && currentUserId ? (() => {
+    const postUserId = typeof post.userId === "object" && post.userId !== null 
+      ? post.userId._id 
+      : post.userId;
+    // Convert both to strings for comparison to handle ObjectId vs string
+    return postUserId && postUserId.toString() === currentUserId.toString();
+  })() : false;
 
   const getBookTypeColor = (type: string) => {
     switch (type) {

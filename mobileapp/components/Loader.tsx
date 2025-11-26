@@ -1,12 +1,20 @@
 import React from "react";
-import AnimatedLoader from "react-native-animated-loader";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import DarkTheme from "@/styles/theme";
 
 export default function Loader() {
   return (
-    <AnimatedLoader
-      visible={true}
-      source={require("@/assets/animation/loading.json")}
-      animationStyle={{ width: 400, height: 400 }}
-    />
+    <View style={styles.container}>
+      <ActivityIndicator size="large" color={DarkTheme.colors.primary} />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: DarkTheme.colors.background,
+  },
+});
