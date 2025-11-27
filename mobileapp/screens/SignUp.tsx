@@ -36,13 +36,18 @@ const SignUpScreen: React.FC = () => {
     confirmPassword: "" 
   });
   const [loading, setLoading] = useState(false);
+  const [generalError, setGeneralError] = useState("");
 
   const validate = () => {
     const newErrors = { name: "", email: "", password: "", confirmPassword: "" };
     let isValid = true;
+    setGeneralError(""); // Clear general error on validation
 
     if (!name.trim()) {
       newErrors.name = "Name is required";
+      isValid = false;
+    } else if (name.trim().length < 2) {
+      newErrors.name = "Name must be at least 2 characters";
       isValid = false;
     }
 
@@ -57,8 +62,11 @@ const SignUpScreen: React.FC = () => {
     if (!password.trim()) {
       newErrors.password = "Password is required";
       isValid = false;
-    } else if (password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    } else if (password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters";
+      isValid = false;
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+      newErrors.password = "Password must contain uppercase, lowercase, and number";
       isValid = false;
     }
 
@@ -74,21 +82,76 @@ const SignUpScreen: React.FC = () => {
     return isValid;
   };
 
+  const getErrorMessage = (error: any): string => {
+    // Check for formatted error from API interceptor first
+    const status = error.status || error.response?.status;
+    const errorMessage = error.response?.data?.message || error.message || "An error occurred";
+
+    // Network errors (no response or status 0)
+    if (!error.response && !status) {
+      if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND" || error.code === "NETWORK_ERROR") {
+        return "Cannot connect to server. Please check your internet connection and try again.";
+      }
+      if (error.message && (error.message.includes("timeout") || error.originalError?.includes("timeout"))) {
+        return "Request timed out. Please check your connection and try again.";
+      }
+      if (error.originalError) {
+        return `Network error: ${error.originalError}. Please check your connection and try again.`;
+      }
+      return "Network error. Please check your internet connection and try again.";
+    }
+
+    // Handle specific status codes
+    switch (status) {
+      case 0:
+        // Network error with status 0
+        return errorMessage || "Network error. Please check your internet connection and try again.";
+      case 400:
+        if (errorMessage.toLowerCase().includes("already exists") || errorMessage.toLowerCase().includes("email")) {
+          return "This email is already registered. Please use a different email or sign in.";
+        }
+        if (errorMessage.toLowerCase().includes("password")) {
+          return "Password does not meet requirements. It must be at least 8 characters with uppercase, lowercase, and a number.";
+        }
+        if (errorMessage.toLowerCase().includes("validation")) {
+          return "Please check all fields and ensure they meet the requirements.";
+        }
+        return errorMessage || "Invalid request. Please check your input and try again.";
+      case 409:
+        return "This email is already registered. Please use a different email or sign in.";
+      case 500:
+      case 502:
+      case 503:
+        return "Server error. Please try again in a few moments.";
+      default:
+        return errorMessage || "An unexpected error occurred. Please try again.";
+    }
+  };
+
   const handleSignUp = async () => {
     if (!validate()) {
       return;
     }
 
     setLoading(true);
+    setGeneralError(""); // Clear any previous errors
     try {
       const response = await authService.register({
-        name,
-        email,
+        name: name.trim(),
+        email: email.trim(),
         password,
         confirmPassword,
       });
 
       if (response.success) {
+        // Clear form on success
+        setName("");
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+        setErrors({ name: "", email: "", password: "", confirmPassword: "" });
+        setGeneralError("");
+
         // Show success message
         Alert.alert(
           "🎉 Congratulations!",
@@ -105,14 +168,15 @@ const SignUpScreen: React.FC = () => {
           { cancelable: false }
         );
       } else {
-        Alert.alert("Error", response.message || "Failed to create account. Please try again.");
+        const errorMsg = response.message || "Failed to create account. Please try again.";
+        setGeneralError(errorMsg);
+        Alert.alert("Sign Up Failed", errorMsg);
       }
     } catch (error: any) {
       console.error("Sign up error:", error);
-      Alert.alert(
-        "Error",
-        error.message || "Failed to create account. Please check your connection and try again."
-      );
+      const errorMessage = getErrorMessage(error);
+      setGeneralError(errorMessage);
+      Alert.alert("Sign Up Failed", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -145,6 +209,27 @@ const SignUpScreen: React.FC = () => {
           </View>
 
           <View style={styles.formContainer}>
+            {generalError ? (
+              <View style={styles.errorBanner}>
+                <MaterialIcons
+                  name="error-outline"
+                  size={20}
+                  color={DarkTheme.colors.danger}
+                />
+                <Text style={styles.errorBannerText}>{generalError}</Text>
+                <TouchableOpacity
+                  onPress={() => setGeneralError("")}
+                  style={styles.errorCloseButton}
+                >
+                  <MaterialIcons
+                    name="close"
+                    size={18}
+                    color={DarkTheme.colors.danger}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
             <InputField
               label="Full Name"
               placeholder="Enter your full name"
@@ -152,6 +237,7 @@ const SignUpScreen: React.FC = () => {
               onChangeText={(text) => {
                 setName(text);
                 setErrors({ ...errors, name: "" });
+                setGeneralError(""); // Clear general error when user types
               }}
               error={errors.name}
               containerStyle={styles.input}
@@ -164,6 +250,7 @@ const SignUpScreen: React.FC = () => {
               onChangeText={(text) => {
                 setEmail(text);
                 setErrors({ ...errors, email: "" });
+                setGeneralError(""); // Clear general error when user types
               }}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -173,11 +260,12 @@ const SignUpScreen: React.FC = () => {
 
             <InputField
               label="Password"
-              placeholder="Enter your password"
+              placeholder="Enter your password (min 8 chars, uppercase, lowercase, number)"
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
                 setErrors({ ...errors, password: "" });
+                setGeneralError(""); // Clear general error when user types
               }}
               secureTextEntry
               error={errors.password}
@@ -191,6 +279,7 @@ const SignUpScreen: React.FC = () => {
               onChangeText={(text) => {
                 setConfirmPassword(text);
                 setErrors({ ...errors, confirmPassword: "" });
+                setGeneralError(""); // Clear general error when user types
               }}
               secureTextEntry
               error={errors.confirmPassword}
@@ -299,6 +388,26 @@ const styles = StyleSheet.create({
   loadingContainer: {
     alignItems: "center",
     marginTop: 12,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: `${DarkTheme.colors.danger}15`,
+    borderLeftWidth: 4,
+    borderLeftColor: DarkTheme.colors.danger,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: DarkTheme.colors.danger,
+    fontSize: responsiveFontSize(1.6),
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  errorCloseButton: {
+    padding: 4,
   },
 });
 

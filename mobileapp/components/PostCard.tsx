@@ -7,6 +7,7 @@ import {
   Image,
   Dimensions,
   Modal,
+  Alert,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -42,6 +43,7 @@ export interface Post {
 interface PostCardProps {
   post: Post;
   onPress: () => void;
+  onAvatarPress?: () => void;
   showDelete?: boolean;
   onDelete?: () => void;
 }
@@ -49,6 +51,7 @@ interface PostCardProps {
 const PostCard: React.FC<PostCardProps> = ({
   post,
   onPress,
+  onAvatarPress,
   showDelete = false,
   onDelete,
 }) => {
@@ -78,18 +81,16 @@ const PostCard: React.FC<PostCardProps> = ({
     }
   };
 
-  const handlePreviewImagePress = (e: any) => {
-    e.stopPropagation();
+  const handlePreviewImagePress = () => {
     // If PDF exists, open PDF; otherwise show full-screen image
     if (post.bookType === "Manual" && (post.pdfUrl || post.fileUrl)) {
-      handlePdfPress(e);
+      handlePdfPress();
     } else if (post.previewImage) {
       setFullImageVisible(true);
     }
   };
 
-  const handlePdfPress = async (e: any) => {
-    e.stopPropagation();
+  const handlePdfPress = async () => {
     const pdfUrl = post.pdfUrl || post.fileUrl;
     if (pdfUrl) {
       try {
@@ -100,8 +101,7 @@ const PostCard: React.FC<PostCardProps> = ({
     }
   };
 
-  const handleLinkPress = async (e: any) => {
-    e.stopPropagation();
+  const handleLinkPress = async () => {
     if (post.referredLink) {
       try {
         const canOpen = await Linking.canOpenURL(post.referredLink);
@@ -117,18 +117,24 @@ const PostCard: React.FC<PostCardProps> = ({
   };
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={onPress}
-      activeOpacity={0.9}
-    >
+    <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.userInfo}>
-          <Avatar
-            uri={post.userAvatar}
-            name={post.userName}
-            size={45}
-          />
+          <TouchableOpacity
+            onPress={() => {
+              if (onAvatarPress) {
+                onAvatarPress();
+              }
+            }}
+            activeOpacity={0.7}
+            disabled={!onAvatarPress}
+          >
+            <Avatar
+              uri={post.userAvatar}
+              name={post.userName}
+              size={45}
+            />
+          </TouchableOpacity>
           <View style={styles.userDetails}>
             <Text style={styles.userName}>{post.userName}</Text>
             <Text style={styles.timeAgo}>{post.createdAt}</Text>
@@ -136,8 +142,7 @@ const PostCard: React.FC<PostCardProps> = ({
         </View>
         {showDelete && onDelete && (
           <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
+            onPress={() => {
               onDelete();
             }}
             style={styles.deleteButton}
@@ -187,7 +192,11 @@ const PostCard: React.FC<PostCardProps> = ({
         </TouchableOpacity>
       )}
 
-      <View style={styles.content}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.9}
+        style={styles.content}
+      >
         <View style={styles.titleRow}>
           <Text style={styles.title} numberOfLines={2}>
             {post.title}
@@ -271,7 +280,7 @@ const PostCard: React.FC<PostCardProps> = ({
             <Text style={styles.commentCount}>{post.commentCount} comments</Text>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* Full Screen Image Modal */}
       <Modal
@@ -305,7 +314,7 @@ const PostCard: React.FC<PostCardProps> = ({
           </TouchableOpacity>
         </View>
       </Modal>
-    </TouchableOpacity>
+    </View>
   );
 };
 

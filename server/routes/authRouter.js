@@ -500,18 +500,25 @@ router.get("/user/:userId", getUserById);
  *     tags: [User Management]
  *     security:
  *       - accessTokenAuth: []
+ *     consumes:
+ *       - multipart/form-data
  *     requestBody:
- *       required: true
+ *       required: false
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
  *               name:
  *                 type: string
  *                 example: "Talha Shafiq"
+ *               profile_picture:
+ *                 type: string
+ *                 format: binary
+ *                 description: Profile image file
  *           example:
  *             name: "Talha Shafiq"
+ *             profile_picture: (binary file)
  *     responses:
  *       200:
  *         description: User information updated successfully
@@ -538,6 +545,10 @@ router.get("/user/:userId", getUserById);
  *                     email:
  *                       type: string
  *                       example: "talhashafiqch@gmail.com"
+ *                     profile_picture:
+ *                       type: string
+ *                       example: "/uploads/profile_picture-1234567890.jpg"
+ *                       description: Profile picture URL path
  *                     is_verified:
  *                       type: boolean
  *                       example: true

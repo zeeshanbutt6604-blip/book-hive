@@ -36,6 +36,13 @@ const HomeScreen: React.FC = () => {
     router.push(`/(routes)/postdetail?postId=${postId}` as any);
   };
 
+  const handleAvatarPress = (post: Post) => {
+    const userId = post.userId;
+    if (userId) {
+      router.push(`/(routes)/profile?userId=${userId}` as any);
+    }
+  };
+
   const handleAddPost = () => {
     setShowAddPostModal(true);
   };
@@ -131,12 +138,16 @@ const HomeScreen: React.FC = () => {
       {renderHeader()}
       <FlatList
         data={posts}
-        renderItem={({ item }) => (
-          <PostCard
-            post={transformPostForCard(item)}
-            onPress={() => handlePostPress(item)}
-          />
-        )}
+        renderItem={({ item }) => {
+          const transformedPost = transformPostForCard(item);
+          return (
+            <PostCard
+              post={transformedPost}
+              onPress={() => handlePostPress(item)}
+              onAvatarPress={() => handleAvatarPress(transformedPost)}
+            />
+          );
+        }}
         keyExtractor={(item) => item._id || item.id || ""}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}

@@ -119,10 +119,23 @@ export const postService = {
   },
 
   // Helper to get full file URL
+  // Constructs full HTTP URL for uploaded files
+  // filePath format: "/uploads/filename.ext" or "uploads/filename.ext"
   getFileUrl: (filePath) => {
     if (!filePath) return null;
-    if (filePath.startsWith("http")) return filePath;
-    return `${BASE_URL}${filePath}`;
+    
+    // If already a full URL, return as is
+    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+      return filePath;
+    }
+    
+    // Ensure path starts with /
+    const normalizedPath = filePath.startsWith("/") ? filePath : `/${filePath}`;
+    
+    // Construct full URL: BASE_URL + path
+    const fullUrl = `${BASE_URL}${normalizedPath}`;
+    
+    return fullUrl;
   },
 };
 

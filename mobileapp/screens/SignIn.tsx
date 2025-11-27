@@ -28,10 +28,12 @@ const SignInScreen: React.FC = () => {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
+  const [generalError, setGeneralError] = useState("");
 
   const validate = () => {
     const newErrors = { email: "", password: "" };
     let isValid = true;
+    setGeneralError(""); // Clear general error on validation
 
     if (!email.trim()) {
       newErrors.email = "Email is required";
@@ -53,6 +55,56 @@ const SignInScreen: React.FC = () => {
     return isValid;
   };
 
+  const getErrorMessage = (error: any): string => {
+    // Check for formatted error from API interceptor first
+    const status = error.status || error.response?.status;
+    const errorMessage = error.response?.data?.message || error.message || "An error occurred";
+
+    // Network errors (no response or status 0)
+    if (!error.response && !status) {
+      if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND" || error.code === "NETWORK_ERROR") {
+        return "Cannot connect to server. Please check your internet connection and try again.";
+      }
+      if (error.message && (error.message.includes("timeout") || error.originalError?.includes("timeout"))) {
+        return "Request timed out. Please check your connection and try again.";
+      }
+      if (error.originalError) {
+        return `Network error: ${error.originalError}. Please check your connection and try again.`;
+      }
+      return "Network error. Please check your internet connection and try again.";
+    }
+
+    // Handle specific status codes
+    switch (status) {
+      case 0:
+        // Network error with status 0
+        return errorMessage || "Network error. Please check your internet connection and try again.";
+      case 400:
+        if (errorMessage.toLowerCase().includes("invalid") || errorMessage.toLowerCase().includes("credentials")) {
+          return "Invalid email or password. Please check your credentials and try again.";
+        }
+        return errorMessage || "Invalid request. Please check your input and try again.";
+      case 401:
+        if (errorMessage.toLowerCase().includes("session") || errorMessage.toLowerCase().includes("expired")) {
+          return "Session expired. Please sign in again.";
+        }
+        return "Invalid email or password. Please check your credentials and try again.";
+      case 403:
+        if (errorMessage.toLowerCase().includes("verify") || errorMessage.toLowerCase().includes("email")) {
+          return "Please verify your email to access your account. Check your inbox for the verification link.";
+        }
+        return errorMessage || "Access denied. Please check your account status.";
+      case 404:
+        return "Service not found. Please try again later.";
+      case 500:
+      case 502:
+      case 503:
+        return "Server error. Please try again in a few moments.";
+      default:
+        return errorMessage || "An unexpected error occurred. Please try again.";
+    }
+  };
+
   const handleSignIn = async () => {
     if (!validate()) {
       return;
@@ -60,15 +112,25 @@ const SignInScreen: React.FC = () => {
 
     try {
       setIsLoading(true);
+      setGeneralError(""); // Clear any previous errors
       const response = await authService.login(email.trim(), password);
       
       if (response.success) {
+        // Clear form on success
+        setEmail("");
+        setPassword("");
+        setErrors({ email: "", password: "" });
         router.replace("/(tabs)");
       } else {
-        Alert.alert("Error", response.message || "Login failed");
+        const errorMsg = response.message || "Login failed. Please check your credentials.";
+        setGeneralError(errorMsg);
+        Alert.alert("Sign In Failed", errorMsg);
       }
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Login failed. Please check your credentials.");
+      console.error("Sign in error:", error);
+      const errorMessage = getErrorMessage(error);
+      setGeneralError(errorMessage);
+      Alert.alert("Sign In Failed", errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -101,6 +163,27 @@ const SignInScreen: React.FC = () => {
           </View>
 
           <View style={styles.formContainer}>
+            {generalError ? (
+              <View style={styles.errorBanner}>
+                <MaterialIcons
+                  name="error-outline"
+                  size={20}
+                  color={DarkTheme.colors.danger}
+                />
+                <Text style={styles.errorBannerText}>{generalError}</Text>
+                <TouchableOpacity
+                  onPress={() => setGeneralError("")}
+                  style={styles.errorCloseButton}
+                >
+                  <MaterialIcons
+                    name="close"
+                    size={18}
+                    color={DarkTheme.colors.danger}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
             <InputField
               label="Email"
               placeholder="Enter your email"
@@ -108,6 +191,7 @@ const SignInScreen: React.FC = () => {
               onChangeText={(text) => {
                 setEmail(text);
                 setErrors({ ...errors, email: "" });
+                setGeneralError(""); // Clear general error when user types
               }}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -122,6 +206,7 @@ const SignInScreen: React.FC = () => {
               onChangeText={(text) => {
                 setPassword(text);
                 setErrors({ ...errors, password: "" });
+                setGeneralError(""); // Clear general error when user types
               }}
               secureTextEntry
               error={errors.password}
@@ -233,6 +318,26 @@ const styles = StyleSheet.create({
     color: DarkTheme.colors.primary,
     fontSize: responsiveFontSize(1.8),
     fontWeight: "600",
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: `${DarkTheme.colors.danger}15`,
+    borderLeftWidth: 4,
+    borderLeftColor: DarkTheme.colors.danger,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: DarkTheme.colors.danger,
+    fontSize: responsiveFontSize(1.6),
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  errorCloseButton: {
+    padding: 4,
   },
 });
 

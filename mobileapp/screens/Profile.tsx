@@ -10,6 +10,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
+  Modal,
+  KeyboardAvoidingView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -26,6 +28,258 @@ import { postService } from "@/services/postService";
 import { userService } from "@/services/userService";
 import Loader from "@/components/Loader";
 import Button from "@/components/Button";
+import InputField from "@/components/InputField";
+import {
+  responsiveFontSize,
+  responsiveScreenHeight,
+  responsiveScreenWidth,
+} from "react-native-responsive-dimensions";
+
+// Edit Profile Modal Component
+interface EditProfileModalProps {
+  user: any;
+  initialName?: string;
+  initialImage?: string | null;
+  onClose: () => void;
+  onSave: (updatedUser: any) => void;
+}
+
+const EditProfileModal: React.FC<EditProfileModalProps> = ({ 
+  user, 
+  initialName,
+  initialImage,
+  onClose, 
+  onSave 
+}) => {
+  const [name, setName] = useState(initialName || user?.name || "");
+  const [profileImage, setProfileImage] = useState<string | null>(initialImage || null);
+  const [errors, setErrors] = useState({ name: "" });
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Update name when user or initialName changes
+  useEffect(() => {
+    if (initialName !== undefined) {
+      setName(initialName);
+    } else if (user?.name) {
+      setName(user.name);
+    }
+  }, [user, initialName]);
+
+  // Update image when initialImage changes
+  useEffect(() => {
+    if (initialImage !== undefined) {
+      setProfileImage(initialImage);
+    }
+  }, [initialImage]);
+
+  const requestImagePickerPermission = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "We need access to your photo library to set a profile picture."
+        );
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const pickImage = async (source: "camera" | "library") => {
+    try {
+      const hasPermission = await requestImagePickerPermission();
+      if (!hasPermission) return;
+
+      let result;
+      if (source === "camera") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission Required",
+            "We need access to your camera to take a photo."
+          );
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setProfileImage(result.assets[0].uri);
+      }
+    } catch (error: any) {
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick image. Please try again.");
+    }
+  };
+
+  const handleImagePicker = () => {
+    Alert.alert(
+      "Change Profile Picture",
+      "Select an option",
+      [
+        {
+          text: "Camera",
+          onPress: () => pickImage("camera"),
+        },
+        {
+          text: "Photo Library",
+          onPress: () => pickImage("library"),
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const validate = () => {
+    const newErrors = { name: "" };
+    let isValid = true;
+
+    if (!name.trim()) {
+      newErrors.name = "Name is required";
+      isValid = false;
+    } else if (name.trim().length < 2) {
+      newErrors.name = "Name must be at least 2 characters";
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      // Update profile with name and/or image
+      const response = await userService.updateProfile(
+        name.trim(),
+        profileImage
+      );
+
+      if (response.success && response.user) {
+        // Update AsyncStorage
+        const USER_DATA_KEY = "@user_data";
+        await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(response.user));
+        
+        Alert.alert("Success", "Profile updated successfully!");
+        onSave(response.user);
+      } else {
+        throw new Error(response.message || "Failed to update profile");
+      }
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      Alert.alert(
+        "Error",
+        error.message || "Failed to update profile. Please try again."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const currentImageUri = profileImage 
+    ? profileImage 
+    : (user?.profile_picture 
+      ? userService.getFileUrl(user.profile_picture) 
+      : undefined);
+
+  return (
+    <SafeAreaView style={editModalStyles.container}>
+      <LinearGradient
+        colors={[DarkTheme.colors.surface, DarkTheme.colors.background]}
+        style={editModalStyles.header}
+      >
+        <TouchableOpacity onPress={onClose} style={editModalStyles.closeButton}>
+          <MaterialIcons name="close" size={28} color={DarkTheme.colors.text} />
+        </TouchableOpacity>
+        <Text style={editModalStyles.headerTitle}>Edit Profile</Text>
+        <View style={editModalStyles.placeholder} />
+      </LinearGradient>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={editModalStyles.keyboardView}
+      >
+        <ScrollView
+          contentContainerStyle={editModalStyles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={editModalStyles.avatarSection}>
+            <TouchableOpacity
+              onPress={handleImagePicker}
+              disabled={uploadingImage}
+              activeOpacity={0.8}
+              style={editModalStyles.avatarTouchable}
+            >
+              <Avatar
+                uri={currentImageUri}
+                name={name || user?.name || "Unknown"}
+                size={120}
+              />
+              <View style={editModalStyles.editImageIconContainer}>
+                <MaterialIcons
+                  name="camera-alt"
+                  size={24}
+                  color={DarkTheme.colors.white}
+                />
+              </View>
+              {uploadingImage && (
+                <View style={editModalStyles.uploadingOverlay}>
+                  <ActivityIndicator size="small" color={DarkTheme.colors.white} />
+                </View>
+              )}
+            </TouchableOpacity>
+            <Text style={editModalStyles.avatarHint}>Tap to change photo</Text>
+          </View>
+
+          <View style={editModalStyles.formSection}>
+            <InputField
+              label="Name"
+              placeholder="Enter your name"
+              value={name}
+              onChangeText={(text) => {
+                setName(text);
+                setErrors({ ...errors, name: "" });
+              }}
+              error={errors.name}
+              containerStyle={editModalStyles.input}
+              autoCapitalize="words"
+            />
+
+            <Button
+              title={saving ? "Saving..." : "Save Changes"}
+              onPress={handleSave}
+              disabled={saving || uploadingImage}
+              customStyle={editModalStyles.saveButton}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+};
 
 const ProfileScreen: React.FC = () => {
   const router = useRouter();
@@ -38,6 +292,10 @@ const ProfileScreen: React.FC = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingName, setEditingName] = useState("");
+  const [editingProfileImage, setEditingProfileImage] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -114,9 +372,26 @@ const ProfileScreen: React.FC = () => {
       const viewingOwnProfile = !userId || targetUserId === currentUserIdValue;
       setIsOwnProfile(viewingOwnProfile);
 
-      if (viewingOwnProfile && currentUserData) {
-        // Own profile - use current user data
-        setUser(currentUserData);
+      if (viewingOwnProfile && currentUserIdValue) {
+        // Own profile - fetch fresh data from API
+        try {
+          const response = await authService.getCurrentUser();
+          if (response.success && response.user) {
+            setUser(response.user);
+            // Update AsyncStorage with fresh data
+            const USER_DATA_KEY = "@user_data";
+            await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(response.user));
+          } else if (currentUserData) {
+            // Fallback to AsyncStorage if API fails
+            setUser(currentUserData);
+          }
+        } catch (error) {
+          console.error("Error fetching current user:", error);
+          // Fallback to AsyncStorage if API fails
+          if (currentUserData) {
+            setUser(currentUserData);
+          }
+        }
       } else if (targetUserId) {
         // Public profile - fetch user data
         try {
@@ -424,7 +699,7 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Profile</Text>
         </View>
-        {isOwnProfile && (
+        {isOwnProfile ? (
           <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
             <MaterialIcons
               name="logout"
@@ -432,8 +707,9 @@ const ProfileScreen: React.FC = () => {
               color={DarkTheme.colors.text}
             />
           </TouchableOpacity>
+        ) : (
+          <View style={styles.placeholder} />
         )}
-        {!isOwnProfile && <View style={styles.placeholder} />}
       </LinearGradient>
 
       <ScrollView
@@ -445,31 +721,54 @@ const ProfileScreen: React.FC = () => {
       >
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            <Avatar
-              uri={
-                user.profile_picture
-                  ? userService.getFileUrl(user.profile_picture)
-                  : undefined
-              }
-              name={user.name || "Unknown"}
-              size={100}
-            />
-            {isOwnProfile && (
+            {isOwnProfile ? (
               <TouchableOpacity
-                style={styles.editIconContainer}
-                onPress={handleEditProfilePicture}
+                onPress={() => {
+                  // Open Edit Profile modal when avatar is tapped
+                  if (user) {
+                    setEditingName(user.name || "");
+                    setEditingProfileImage(null);
+                    setShowEditModal(true);
+                  }
+                }}
                 disabled={uploadingImage}
+                activeOpacity={0.8}
+                style={styles.avatarTouchable}
               >
-                {uploadingImage ? (
-                  <ActivityIndicator size="small" color={DarkTheme.colors.white} />
-                ) : (
-                  <MaterialIcons
-                    name="edit"
-                    size={20}
-                    color={DarkTheme.colors.white}
-                  />
+                <Avatar
+                  uri={
+                    user.profile_picture
+                      ? userService.getFileUrl(user.profile_picture)
+                      : undefined
+                  }
+                  name={user.name || "Unknown"}
+                  size={100}
+                />
+                {uploadingImage && (
+                  <View style={styles.uploadingOverlay}>
+                    <ActivityIndicator size="small" color={DarkTheme.colors.white} />
+                  </View>
+                )}
+                {!uploadingImage && (
+                  <View style={styles.editIconContainer}>
+                    <MaterialIcons
+                      name="edit"
+                      size={20}
+                      color={DarkTheme.colors.white}
+                    />
+                  </View>
                 )}
               </TouchableOpacity>
+            ) : (
+              <Avatar
+                uri={
+                  user.profile_picture
+                    ? userService.getFileUrl(user.profile_picture)
+                    : undefined
+                }
+                name={user.name || "Unknown"}
+                size={100}
+              />
             )}
           </View>
           <Text style={styles.userName}>{user.name || "Unknown"}</Text>
@@ -490,6 +789,14 @@ const ProfileScreen: React.FC = () => {
                 key={post._id || post.id}
                 post={post}
                 onPress={() => handlePostPress(post)}
+                onAvatarPress={() => {
+                  const postUserId = typeof post.userId === "object" && post.userId !== null
+                    ? post.userId._id
+                    : post.userId;
+                  if (postUserId) {
+                    router.push(`/(routes)/profile?userId=${postUserId}` as any);
+                  }
+                }}
                 showDelete={isOwnProfile}
                 onDelete={() => handleDeletePost(post._id || post.id || "")}
               />
@@ -511,6 +818,52 @@ const ProfileScreen: React.FC = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowEditModal(false);
+          setEditingName("");
+          setEditingProfileImage(null);
+        }}
+      >
+        <EditProfileModal
+          user={user}
+          initialName={editingName}
+          initialImage={editingProfileImage}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingName("");
+            setEditingProfileImage(null);
+          }}
+          onSave={async (updatedUser) => {
+            console.log("Profile updated, new user data:", updatedUser);
+            // Update user state immediately with merged data
+            if (updatedUser) {
+              setUser((prevUser: any) => ({
+                ...prevUser,
+                ...updatedUser,
+                name: updatedUser.name || prevUser?.name, // Ensure name is updated
+              }));
+              // Also update AsyncStorage with new data
+              const USER_DATA_KEY = "@user_data";
+              await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify({
+                ...updatedUser,
+                name: updatedUser.name,
+              }));
+            }
+            // Reload profile to ensure everything is in sync
+            await loadProfile();
+            // Close modal and reset
+            setShowEditModal(false);
+            setEditingName("");
+            setEditingProfileImage(null);
+          }}
+        />
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -562,6 +915,9 @@ const styles = StyleSheet.create({
     position: "relative",
     marginBottom: 16,
   },
+  avatarTouchable: {
+    position: "relative",
+  },
   editIconContainer: {
     position: "absolute",
     bottom: 0,
@@ -574,6 +930,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 3,
     borderColor: DarkTheme.colors.background,
+    zIndex: 10,
+  },
+  uploadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 50,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 5,
   },
   userName: {
     fontSize: 24,
@@ -628,6 +997,93 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: DarkTheme.colors.subtext,
     marginBottom: 20,
+  },
+});
+
+// Edit Profile Modal Styles
+const editModalStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: DarkTheme.colors.background,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: responsiveScreenWidth(4),
+    paddingVertical: responsiveScreenHeight(2),
+    borderBottomWidth: 1,
+    borderBottomColor: DarkTheme.colors.border,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: responsiveFontSize(2.3),
+    fontWeight: "bold",
+    color: DarkTheme.colors.text,
+    flex: 1,
+    textAlign: "center",
+  },
+  placeholder: {
+    width: 36,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: responsiveScreenHeight(4),
+  },
+  avatarSection: {
+    alignItems: "center",
+    paddingVertical: responsiveScreenHeight(4),
+    borderBottomWidth: 1,
+    borderBottomColor: DarkTheme.colors.border,
+  },
+  avatarTouchable: {
+    position: "relative",
+    marginBottom: responsiveScreenHeight(1.5),
+  },
+  editImageIconContainer: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: DarkTheme.colors.primary,
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: DarkTheme.colors.background,
+    zIndex: 10,
+  },
+  uploadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 60,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 5,
+  },
+  avatarHint: {
+    fontSize: responsiveFontSize(1.6),
+    color: DarkTheme.colors.subtext,
+    marginTop: responsiveScreenHeight(1),
+  },
+  formSection: {
+    padding: responsiveScreenWidth(4),
+  },
+  input: {
+    marginBottom: responsiveScreenHeight(2),
+  },
+  saveButton: {
+    marginTop: responsiveScreenHeight(2),
   },
 });
 

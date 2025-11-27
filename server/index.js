@@ -4,6 +4,8 @@ import bodyParser from "body-parser";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
+import path from "path";
+import { fileURLToPath } from "url";
 
 import database from "./config/db.js";
 import swaggerSpecs from "./config/swagger.js";
@@ -42,7 +44,16 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-app.use("/uploads", express.static("uploads"));
+// Serve static files from uploads directory
+// This makes files accessible at http://BASE_URL/uploads/filename.ext
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Log static file serving configuration
+console.log("📁 Static files served from:", path.join(__dirname, "uploads"));
+console.log("🌐 Static files accessible at: http://localhost:" + port + "/uploads/");
 
 // Swagger Documentation
 app.use(

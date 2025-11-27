@@ -13,6 +13,8 @@ import {
   RefreshControl,
   Modal,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -180,7 +182,7 @@ const PostDetailScreen: React.FC = () => {
   // Check if current user is the post owner - delete button should only show for post owner
   const isOwner = post && currentUserId ? (() => {
     const postUserId = typeof post.userId === "object" && post.userId !== null 
-      ? post.userId._id 
+      ? (post.userId as any)._id 
       : post.userId;
     // Convert both to strings for comparison to handle ObjectId vs string
     return postUserId && postUserId.toString() === currentUserId.toString();
@@ -296,7 +298,7 @@ const PostDetailScreen: React.FC = () => {
     );
   }
 
-  const previewImageUrl = post.previewImage || (post.previewimage ? postService.getFileUrl(post.previewimage) : undefined);
+  const previewImageUrl = post.previewImage;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -311,13 +313,19 @@ const PostDetailScreen: React.FC = () => {
         <View style={styles.placeholder} />
       </LinearGradient>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoidingView}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          keyboardShouldPersistTaps="handled"
+        >
         {previewImageUrl && post.bookType !== "Referred Link" && (
           <TouchableOpacity onPress={handlePreviewImagePress} activeOpacity={0.9} style={styles.previewImageContainer}>
             <Image 
@@ -374,14 +382,38 @@ const PostDetailScreen: React.FC = () => {
           <Text style={styles.description}>{post.description}</Text>
 
           <View style={styles.authorSection}>
-            <Avatar
-              uri={post.userAvatar}
-              name={post.userName || "Unknown"}
-              size={50}
-            />
+            <TouchableOpacity
+              onPress={() => {
+                const postUserId = typeof post.userId === "object" && post.userId !== null
+                  ? (post.userId as any)._id
+                  : post.userId;
+                if (postUserId) {
+                  router.push(`/(routes)/profile?userId=${postUserId}` as any);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Avatar
+                uri={post.userAvatar}
+                name={post.userName || "Unknown"}
+                size={50}
+              />
+            </TouchableOpacity>
             <View style={styles.authorInfo}>
               <Text style={styles.authorLabel}>Posted by</Text>
-              <Text style={styles.authorName}>{post.userName || "Unknown"}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  const postUserId = typeof post.userId === "object" && post.userId !== null
+                    ? (post.userId as any)._id
+                    : post.userId;
+                  if (postUserId) {
+                    router.push(`/(routes)/profile?userId=${postUserId}` as any);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.authorName}>{post.userName || "Unknown"}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -395,7 +427,7 @@ const PostDetailScreen: React.FC = () => {
           ) : (
             <View style={styles.emptyComments}>
               <MaterialIcons
-                name="comment-outline"
+                name="comment"
                 size={48}
                 color={DarkTheme.colors.disabled}
               />
@@ -406,48 +438,50 @@ const PostDetailScreen: React.FC = () => {
             </View>
           )}
         </View>
-      </ScrollView>
+        </ScrollView>
 
-      <View style={styles.footer}>
-        <View style={styles.commentInputContainer}>
-          <TextInput
-            style={styles.commentInput}
-            placeholder="Add a comment..."
-            placeholderTextColor={DarkTheme.colors.disabled}
-            value={newComment}
-            onChangeText={setNewComment}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            onPress={handleAddComment}
-            style={styles.sendButton}
-            disabled={!newComment.trim() || commentLoading}
-          >
-            {commentLoading ? (
-              <ActivityIndicator size="small" color={DarkTheme.colors.primary} />
-            ) : (
-              <MaterialIcons
-                name="send"
-                size={24}
-                color={
-                  newComment.trim()
-                    ? DarkTheme.colors.primary
-                    : DarkTheme.colors.disabled
-                }
-              />
-            )}
-          </TouchableOpacity>
+        <View style={styles.footer}>
+          <View style={styles.commentInputContainer}>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Add a comment..."
+              placeholderTextColor={DarkTheme.colors.disabled}
+              value={newComment}
+              onChangeText={setNewComment}
+              multiline
+              maxLength={500}
+              returnKeyType="default"
+            />
+            <TouchableOpacity
+              onPress={handleAddComment}
+              style={styles.sendButton}
+              disabled={!newComment.trim() || commentLoading}
+            >
+              {commentLoading ? (
+                <ActivityIndicator size="small" color={DarkTheme.colors.primary} />
+              ) : (
+                <MaterialIcons
+                  name="send"
+                  size={24}
+                  color={
+                    newComment.trim()
+                      ? DarkTheme.colors.primary
+                      : DarkTheme.colors.disabled
+                  }
+                />
+              )}
+            </TouchableOpacity>
+          </View>
+          {isOwner && (
+            <Button
+              title="Delete Post"
+              onPress={handleDeletePost}
+              disabled={false}
+              customStyle={styles.deleteButton}
+            />
+          )}
         </View>
-        {isOwner && (
-          <Button
-            title="Delete Post"
-            onPress={handleDeletePost}
-            disabled={false}
-            customStyle={styles.deleteButton}
-          />
-        )}
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -456,6 +490,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DarkTheme.colors.background,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   header: {
     flexDirection: "row",
@@ -480,7 +517,7 @@ const styles = StyleSheet.create({
     width: responsiveScreenWidth(9),
   },
   scrollContent: {
-    paddingBottom: responsiveScreenHeight(12),
+    paddingBottom: responsiveScreenHeight(2),
     flexGrow: 1,
   },
   previewImageContainer: {
@@ -598,15 +635,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: DarkTheme.colors.surface,
     borderTopWidth: 1,
     borderTopColor: DarkTheme.colors.border,
     padding: responsiveScreenWidth(4),
-    paddingBottom: responsiveScreenHeight(2),
+    paddingBottom: Platform.OS === "ios" ? responsiveScreenHeight(2) : responsiveScreenHeight(1),
+    paddingTop: responsiveScreenHeight(1),
   },
   commentInputContainer: {
     flexDirection: "row",

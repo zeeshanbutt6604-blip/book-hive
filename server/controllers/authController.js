@@ -309,7 +309,9 @@ export const getUserById = catchAsyncError(async (req, res, next) => {
 // Update user info
 export const updateUserInfo = catchAsyncError(async (req, res, next) => {
   try {
-    const { name } = req.body;
+    // Extract name from req.body (works with both JSON and multipart/form-data)
+    // When using multer with multipart/form-data, text fields are in req.body
+    const name = req.body?.name;
     const userId = req.user?.id;
     const user = await User.findById(userId);
 
@@ -317,24 +319,72 @@ export const updateUserInfo = catchAsyncError(async (req, res, next) => {
       return next(new ErrorHandler("User not found", 404));
     }
 
-    if (name) {
-      user.name = name;
+    // Log received data for debugging
+    console.log("Update user info - received data:", {
+      name: name,
+      nameType: typeof name,
+      hasFile: !!req.file,
+      bodyKeys: Object.keys(req.body || {}),
+    });
+
+    // Update name if provided
+    // When using multipart/form-data with multer, text fields are in req.body
+    if (name !== undefined && name !== null && name !== '') {
+      const trimmedName = typeof name === 'string' ? name.trim() : String(name).trim();
+      if (trimmedName && trimmedName.length > 0) {
+        const oldName = user.name;
+        user.name = trimmedName;
+        console.log("✅ Updating user name from:", oldName, "to:", user.name);
+      } else {
+        console.log("⚠️ Name provided but empty or whitespace only");
+      }
+    } else {
+      console.log("ℹ️ No name provided in request");
     }
 
     // Handle profile picture upload
     if (req.file) {
-      // req.file.path will be something like "uploads/profile_picture-1234567890.jpg"
-      // We need to convert it to a URL path like "/uploads/profile_picture-1234567890.jpg"
-      const filePath = req.file.path.replace(/\\/g, "/"); // Replace backslashes with forward slashes for cross-platform compatibility
-      user.profile_picture = `/${filePath}`;
+      // req.file.path is an absolute path like "D:\...\server\uploads\profile_picture-1234567890.jpg"
+      // We need to extract just the relative path: "/uploads/profile_picture-1234567890.jpg"
+      const filePath = req.file.path.replace(/\\/g, "/"); // Replace backslashes with forward slashes
+      
+      // Extract the relative path from uploads folder
+      // Find the "uploads" folder in the path and get everything after it
+      const uploadsIndex = filePath.indexOf("uploads/");
+      if (uploadsIndex !== -1) {
+        // Get the path starting from "uploads/"
+        const relativePath = filePath.substring(uploadsIndex);
+        // Ensure it starts with / for URL path
+        user.profile_picture = `/${relativePath}`;
+      } else {
+        // Fallback: if "uploads/" not found, use filename directly
+        user.profile_picture = `/uploads/${req.file.filename}`;
+      }
+      
+      console.log("Profile picture saved:", {
+        originalPath: req.file.path,
+        savedPath: user.profile_picture,
+        filename: req.file.filename
+      });
     }
 
     await user.save();
 
-    res.status(201).json({
+    // Remove password from response
+    user.password = undefined;
+
+    res.status(200).json({
       success: true,
       message: "User updated successfully",
-      user,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        profile_picture: user.profile_picture, // Include profile_picture URL in response
+        is_verified: user.is_verified,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
     });
   } catch (error) {
     return next(new ErrorHandler(error.message, 400));

@@ -8,8 +8,17 @@ const USER_DATA_KEY = "@user_data";
 export const authService = {
   // Register user
   register: async (userData) => {
-    const response = await api.post("/api/auth/register", userData);
-    return response.data;
+    try {
+      const response = await api.post("/api/auth/register", userData);
+      return response.data;
+    } catch (error) {
+      // Re-throw with formatted error
+      throw {
+        message: error.message || "Registration failed",
+        response: error.response || null,
+        code: error.code || null,
+      };
+    }
   },
 
   // Activate user
@@ -20,18 +29,29 @@ export const authService = {
 
   // Login
   login: async (email, password) => {
-    const response = await api.post("/api/auth/login", { email, password });
-    
-    if (response.data.success && response.data.accessToken) {
-      // Store tokens and user data
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, response.data.accessToken);
-      if (response.data.refreshToken) {
-        await AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.data.refreshToken);
+    try {
+      const response = await api.post("/api/auth/login", { email, password });
+      
+      if (response.data.success && response.data.accessToken) {
+        // Store tokens and user data
+        await AsyncStorage.setItem(AUTH_TOKEN_KEY, response.data.accessToken);
+        if (response.data.refreshToken) {
+          await AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.data.refreshToken);
+        }
+        if (response.data.user) {
+          await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
+        }
       }
-      await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
+      
+      return response.data;
+    } catch (error) {
+      // Re-throw with formatted error
+      throw {
+        message: error.message || "Login failed",
+        response: error.response || null,
+        code: error.code || null,
+      };
     }
-    
-    return response.data;
   },
 
   // Refresh access token
