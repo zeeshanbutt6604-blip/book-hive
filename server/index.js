@@ -13,7 +13,18 @@ import authRouter from "./routes/authRouter.js";
 import postRouter from "./routes/postRouter.js";
 import errorMiddleware from "./middleware/error.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment-specific .env file
+// Defaults to development if NODE_ENV is not set
+const nodeEnv = process.env.NODE_ENV || "development";
+const envFile = nodeEnv === "production" 
+  ? ".env.production" 
+  : ".env.development";
+
+dotenv.config({ path: path.join(__dirname, envFile) });
+console.log(`📝 Loading environment: ${nodeEnv} from ${envFile}`);
 
 const app = express();
 const port = process.env.PORT || 5274;
@@ -46,9 +57,6 @@ app.use(cookieParser());
 
 // Serve static files from uploads directory
 // This makes files accessible at http://BASE_URL/uploads/filename.ext
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Log static file serving configuration

@@ -141,11 +141,11 @@ const HomeScreen: React.FC = () => {
         renderItem={({ item }) => {
           const transformedPost = transformPostForCard(item);
           return (
-            <PostCard
+          <PostCard
               post={transformedPost}
-              onPress={() => handlePostPress(item)}
+            onPress={() => handlePostPress(item)}
               onAvatarPress={() => handleAvatarPress(transformedPost)}
-            />
+          />
           );
         }}
         keyExtractor={(item) => item._id || item.id || ""}
