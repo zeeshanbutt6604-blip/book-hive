@@ -12,7 +12,10 @@ import {
   Platform,
   Modal,
   KeyboardAvoidingView,
+  FlatList,
+  Dimensions,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -34,6 +37,13 @@ import {
   responsiveScreenHeight,
   responsiveScreenWidth,
 } from "react-native-responsive-dimensions";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const GRID_COLUMNS = 3;
+const GRID_GAP = 2;
+const PADDING_HORIZONTAL = 16; // padding from postsSection
+// Calculate item size: screen width minus padding on both sides, minus gaps between items
+const GRID_ITEM_SIZE = Math.floor((SCREEN_WIDTH - (PADDING_HORIZONTAL * 2) - (GRID_GAP * (GRID_COLUMNS - 1))) / GRID_COLUMNS);
 
 // Edit Profile Modal Component
 interface EditProfileModalProps {
@@ -499,6 +509,19 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
+  const getBookTypeColor = (type: string) => {
+    switch (type) {
+      case "Manual":
+        return "#FFE66D";
+      case "Donate":
+        return "#C77DFF";
+      case "Referred Link":
+        return "#6C5CE7";
+      default:
+        return DarkTheme.colors.primary;
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadProfile();
@@ -712,13 +735,7 @@ const ProfileScreen: React.FC = () => {
         )}
       </LinearGradient>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
+      <View style={styles.contentContainer}>
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             {isOwnProfile ? (
@@ -783,41 +800,96 @@ const ProfileScreen: React.FC = () => {
             <Text style={styles.postCount}>({userPosts.length})</Text>
           </View>
 
-          {userPosts.length > 0 ? (
-            userPosts.map((post) => (
-              <PostCard
-                key={post._id || post.id}
-                post={post}
-                onPress={() => handlePostPress(post)}
-                onAvatarPress={() => {
-                  const postUserId = typeof post.userId === "object" && post.userId !== null
-                    ? post.userId._id
-                    : post.userId;
-                  if (postUserId) {
-                    router.push(`/(routes)/profile?userId=${postUserId}` as any);
-                  }
-                }}
-                showDelete={isOwnProfile}
-                onDelete={() => handleDeletePost(post._id || post.id || "")}
-              />
-            ))
-          ) : (
-            <View style={styles.emptyContainer}>
-              <MaterialIcons
-                name="auto-stories"
-                size={64}
-                color={DarkTheme.colors.disabled}
-              />
-              <Text style={styles.emptyText}>No posts yet</Text>
-              <Text style={styles.emptySubtext}>
-                {isOwnProfile
-                  ? "Start sharing books to see them here!"
-                  : "This user hasn't shared any books yet."}
-              </Text>
-            </View>
-          )}
+          <FlatList
+            data={userPosts}
+            numColumns={GRID_COLUMNS}
+            keyExtractor={(item) => item._id || item.id || String(Math.random())}
+            renderItem={({ item: post, index }) => {
+              const isLastInRow = (index + 1) % GRID_COLUMNS === 0;
+              return (
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    isLastInRow && styles.gridItemLastInRow
+                  ]}
+                  onPress={() => handlePostPress(post)}
+                  activeOpacity={0.8}
+                >
+                  {post.previewImage ? (
+                    <ExpoImage
+                      source={{ uri: post.previewImage }}
+                      style={styles.gridImage}
+                      contentFit="cover"
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
+                  ) : (
+                    <View style={styles.gridPlaceholder}>
+                      {post.bookType === "Manual" ? (
+                        <MaterialIcons
+                          name="picture-as-pdf"
+                          size={32}
+                          color={DarkTheme.colors.primary}
+                        />
+                      ) : post.bookType === "Referred Link" ? (
+                        <MaterialIcons
+                          name="link"
+                          size={32}
+                          color={DarkTheme.colors.primary}
+                        />
+                      ) : (
+                        <MaterialIcons
+                          name="auto-stories"
+                          size={32}
+                          color={DarkTheme.colors.primary}
+                        />
+                      )}
+                    </View>
+                  )}
+                  {/* Book type indicator overlay */}
+                  <View style={styles.gridOverlay}>
+                    <View
+                      style={[
+                        styles.gridTypeBadge,
+                        { backgroundColor: getBookTypeColor(post.bookType) },
+                      ]}
+                    >
+                      <Text style={styles.gridTypeText} numberOfLines={1}>
+                        {post.bookType}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+            scrollEnabled={true}
+            showsVerticalScrollIndicator={true}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            contentContainerStyle={[
+              styles.postsListContent,
+              userPosts.length === 0 && styles.emptyListContent
+            ]}
+            columnWrapperStyle={userPosts.length > 0 ? styles.gridRow : undefined}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <MaterialIcons
+                  name="auto-stories"
+                  size={64}
+                  color={DarkTheme.colors.disabled}
+                />
+                <Text style={styles.emptyText}>No posts yet</Text>
+                <Text style={styles.emptySubtext}>
+                  {isOwnProfile
+                    ? "Start sharing books to see them here!"
+                    : "This user hasn't shared any books yet."}
+                </Text>
+              </View>
+            }
+          />
         </View>
-      </ScrollView>
+      </View>
 
       {/* Edit Profile Modal */}
       <Modal
@@ -902,8 +974,8 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 32,
   },
-  scrollContent: {
-    paddingBottom: 40,
+  contentContainer: {
+    flex: 1,
   },
   profileSection: {
     alignItems: "center",
@@ -955,12 +1027,77 @@ const styles = StyleSheet.create({
     color: DarkTheme.colors.subtext,
   },
   postsSection: {
+    flex: 1,
     padding: 16,
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 16,
+  },
+  postsListContent: {
+    paddingBottom: 40,
+    alignItems: "flex-start",
+  },
+  emptyListContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  gridRow: {
+    justifyContent: "flex-start",
+    paddingHorizontal: 0,
+    width: "100%",
+  },
+  gridItem: {
+    width: GRID_ITEM_SIZE,
+    height: GRID_ITEM_SIZE,
+    marginRight: GRID_GAP,
+    marginBottom: GRID_GAP,
+    backgroundColor: DarkTheme.colors.surface,
+    borderRadius: 4,
+    overflow: "hidden",
+    position: "relative",
+    flex: 0,
+    flexShrink: 0,
+    flexGrow: 0,
+  },
+  gridItemLastInRow: {
+    marginRight: 0,
+  },
+  gridImage: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: DarkTheme.colors.border,
+  },
+  gridPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: DarkTheme.colors.surface,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: DarkTheme.colors.border,
+  },
+  gridOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "flex-end",
+    alignItems: "flex-start",
+    padding: 4,
+  },
+  gridTypeBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    maxWidth: GRID_ITEM_SIZE - 8,
+  },
+  gridTypeText: {
+    fontSize: 9,
+    fontWeight: "600",
+    color: "#fff",
   },
   sectionTitle: {
     fontSize: 20,
